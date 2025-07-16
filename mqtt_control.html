@@ -1,0 +1,384 @@
+<!--- FULL CODE  --->
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
+  <title>MQTT Control & Sensor Data</title>
+  <link rel="manifest" href="manifest.json" />
+  <meta name="theme-color" content="#6a11cb" />
+  <meta name="mobile-web-app-capable" content="yes" />
+  <meta name="apple-mobile-web-app-capable" content="yes" />
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+  <link rel="apple-touch-icon" href="icon-192.png" />
+  <script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-app-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-auth-compat.js"></script>
+  <script src="https://unpkg.com/mqtt/dist/mqtt.min.js"></script>
+  <style>
+    /* [ALL YOUR ORIGINAL STYLES — UNCHANGED] */
+    body {
+      font-family: Arial, sans-serif;
+      background: linear-gradient(to right, #6a11cb, #2575fc);
+      color: white;
+      text-align: center;
+      margin: 0;
+      padding: 0;
+      -webkit-tap-highlight-color: transparent;
+    }
+    .container {
+      background: white;
+      color: black;
+      max-width: 90%;
+      width: 400px;
+      margin: 30px auto;
+      padding: 30px;
+      border-radius: 10px;
+      box-shadow: 0px 4px 10px rgba(0, 0, 0, 0.2);
+    }
+    h1 {
+      font-size: 22px;
+      margin-bottom: 10px;
+    }
+    label {
+      font-weight: bold;
+    }
+    #message {
+      width: calc(100% - 20px);
+      padding: 10px;
+      margin-top: 10px;
+      border: 2px solid #ccc;
+      border-radius: 5px;
+      text-align: center;
+      font-size: 16px;
+    }
+    button {
+      width: 100%;
+      padding: 10px;
+      margin-top: 10px;
+      border: none;
+      cursor: pointer;
+      border-radius: 5px;
+      font-size: 16px;
+    }
+    #sendButton {
+      background: #3b82f6;
+      color: white;
+    }
+    #sendButton:hover {
+      background: #2563eb;
+    }
+    #clearButton {
+      background: #f44336;
+      color: white;
+    }
+    #clearButton:hover {
+      background: #d32f2f;
+    }
+    table {
+      width: 100%;
+      margin-top: 20px;
+      border-collapse: collapse;
+    }
+    table, th, td {
+      border: 1px solid #ddd;
+    }
+    th {
+      background: #3b82f6;
+      color: white;
+      padding: 10px;
+    }
+    td {
+      padding: 10px;
+      text-align: center;
+      background: #f9f9f9;
+    }
+    .logout-btn {
+      background: red;
+      color: white;
+      position: fixed;
+      bottom: 20px;
+      right: 20px;
+      font-size: 14px;
+      padding: 8px 15px;
+      border-radius: 5px;
+      border: none;
+      cursor: pointer;
+      width: auto;
+      display: inline-block;
+    }
+    .logout-btn:hover {
+      background: darkred;
+    }
+    #messageHistory {
+      margin-top: 20px;
+      max-height: 200px;
+      overflow-y: auto;
+      border: 1px solid #ddd;
+      border-radius: 5px;
+      padding: 10px;
+      background: #f9f9f9;
+      color: black;
+    }
+    #messageHistory h3 {
+      margin-top: 0;
+      color: #3b82f6;
+    }
+    .history-item {
+      padding: 5px;
+      border-bottom: 1px solid #eee;
+      text-align: left;
+    }
+    .history-item:last-child {
+      border-bottom: none;
+    }
+    #connectionStatus {
+      margin-top: 10px;
+      padding: 5px;
+      border-radius: 5px;
+      font-weight: bold;
+    }
+    .connected {
+      background-color: #4CAF50;
+      color: white;
+    }
+    .disconnected {
+      background-color: #f44336;
+      color: white;
+    }
+    #boardStatusContainer {
+      margin-top: 10px;
+    }
+    .status-box {
+      margin: 5px 0;
+      padding: 5px;
+      border-radius: 5px;
+      font-weight: bold;
+    }
+    .status-connected {
+      background-color: #4CAF50;
+      color: white;
+    }
+    .status-disconnected {
+      background-color: #f44336;
+      color: white;
+    }
+    #installBtn {
+      display: none;
+      background: #4CAF50;
+      margin: 10px 0;
+    }
+    @media (max-width: 600px) {
+      .container {
+        max-width: 95%;
+        width: auto;
+        padding: 15px;
+      }
+      h1 {
+        font-size: 20px;
+      }
+      button {
+        font-size: 14px;
+        padding: 8px;
+      }
+      .logout-btn {
+        font-size: 12px;
+        padding: 8px 12px;
+        bottom: 15px;
+        right: 15px;
+      }
+    }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <h1>Message via MQTT</h1>
+    <div id="connectionStatus" class="disconnected">Disconnected</div>
+
+    <div id="boardStatusContainer">
+      <div id="boardWiFiStatus" class="status-box status-disconnected">Device WiFi Disconnected</div>
+      <div id="boardMQTTStatus" class="status-box status-disconnected">Device MQTT Disconnected</div>
+    </div>
+
+    <form id="mqttForm">
+      <label for="message">Enter Message:</label>
+      <input type="text" id="message" name="message" required />
+      <button type="submit" id="sendButton">Send Message</button>
+    </form>
+
+    <button id="clearButton">CLEAR</button>
+
+    <div id="messageHistory">
+      <h3>Message History</h3>
+    </div>
+
+    <h2>Sensor Data</h2>
+    <table>
+      <tr>
+        <th>Temperature (°C)</th>
+        <th>Pressure (hPa)</th>
+        <th>Altitude (m)</th>
+        <th>Weather</th>
+      </tr>
+      <tr>
+        <td id="temp">--</td>
+        <td id="pressure">--</td>
+        <td id="altitude">--</td>
+        <td id="weather">--</td>
+      </tr>
+    </table>
+  </div>
+
+  <button id="logoutButton" class="logout-btn">Logout</button>
+
+  <script>
+    const firebaseConfig = {
+      apiKey: "AIzaSyAlzO4KX4TiF3sT9OdwC4iO1XyNlqMEJKA",
+      authDomain: "notice-board-a831b.firebaseapp.com",
+      projectId: "notice-board-a831b",
+      storageBucket: "notice-board-a831b.appspot.com",
+      messagingSenderId: "879522552762",
+      appId: "1:879522552762:web:89f0f4811411582c0f9b83",
+      measurementId: "G-VRPVZK06P1"
+    };
+    firebase.initializeApp(firebaseConfig);
+    const auth = firebase.auth();
+
+    const allowedEmails = [
+      "vysakhvmallayya@gmail.com",
+      "vysakhvmallayyacloud01@gmail.com",
+      "hod.ec@adishankara.ac.in",
+      "harikrishnankjharihkkj11",
+      "joshjane777@gmail.com"
+      ];
+    auth.onAuthStateChanged((user) => {
+      if (!user) {
+        // Not logged in
+        window.location.href = 'index.html';
+      } else if (!allowedEmails.includes(user.email)) {
+        // Logged in but not allowed
+        alert("Unauthorized access. You will be logged out.");
+        auth.signOut().then(() => window.location.href = 'index.html');
+      }
+    });
+    
+    const brokerConfigs = {
+      "Mosquitto": { name: "Mosquitto", wsUrl: "wss://test.mosquitto.org:8081/mqtt" },
+      "HiveMQ": { name: "HiveMQ", wsUrl: "wss://broker.hivemq.com:8884/mqtt" }
+    };
+
+    let clients = {};
+    let currentActiveBroker = null;
+    let lastSensorMessageTime = Date.now();
+    const SENSOR_TIMEOUT_MS = 20000;
+
+    function updateConnectionStatus(connected) {
+      const statusElement = document.getElementById('connectionStatus');
+      statusElement.textContent = connected ? "App Connected to MQTT" : "Disconnected";
+      statusElement.className = connected ? 'connected' : 'disconnected';
+    }
+
+    function getActiveClient() {
+      return currentActiveBroker ? clients[currentActiveBroker] : null;
+    }
+
+    function setupAllBrokers() {
+      Object.entries(brokerConfigs).forEach(([brokerName, config]) => {
+        const client = mqtt.connect(config.wsUrl, {
+          clientId: brokerName + "_" + Math.random().toString(16).substr(2, 8),
+          clean: true,
+          reconnectPeriod: 1000,
+        });
+
+        clients[brokerName] = client;
+
+        client.on("connect", () => {
+          client.subscribe("ece/sensorDataujndubd");
+        });
+
+        client.on("message", (topic, message) => {
+          if (topic !== "ece/sensorDataujndubd") return;
+
+          lastSensorMessageTime = Date.now();
+          currentActiveBroker = brokerName;
+
+          const parts = message.toString().split("|").map(p => p.trim());
+          const temp = parseFloat(parts[0]?.split(":")[1]);
+          const press = parseFloat(parts[1]?.split(":")[1]);
+          const alt = parseFloat(parts[2]?.split(":")[1]);
+          const weather = parts[3];
+          const wifiStatus = parts[4]?.includes("Connected");
+          const mqttStatus = parts[5]?.includes("Connected");
+
+          document.getElementById("temp").innerText = isNaN(temp) ? "--" : `${temp.toFixed(1)} °C`;
+          document.getElementById("pressure").innerText = isNaN(press) ? "--" : `${press.toFixed(1)} hPa`;
+          document.getElementById("altitude").innerText = isNaN(alt) ? "--" : `${alt.toFixed(1)} m`;
+          document.getElementById("weather").innerText = weather || "--";
+
+          const wifiBox = document.getElementById("boardWiFiStatus");
+          wifiBox.textContent = wifiStatus ? "Device WiFi Connected" : "Device WiFi Disconnected";
+          wifiBox.className = wifiStatus ? "status-box status-connected" : "status-box status-disconnected";
+
+          const mqttBox = document.getElementById("boardMQTTStatus");
+          mqttBox.textContent = mqttStatus ? "Device MQTT Connected" : "Device MQTT Disconnected";
+          mqttBox.className = mqttStatus ? "status-box status-connected" : "status-box status-disconnected";
+
+          updateConnectionStatus(true);
+        });
+
+        client.on("close", () => updateConnectionStatus(false));
+      });
+    }
+
+    setupAllBrokers();
+
+    setInterval(() => {
+      if (Date.now() - lastSensorMessageTime > SENSOR_TIMEOUT_MS) {
+        document.getElementById("boardWiFiStatus").textContent = "Device WiFi Disconnected";
+        document.getElementById("boardWiFiStatus").className = "status-box status-disconnected";
+        document.getElementById("boardMQTTStatus").textContent = "Device MQTT Disconnected";
+        document.getElementById("boardMQTTStatus").className = "status-box status-disconnected";
+        updateConnectionStatus(false);
+        currentActiveBroker = null;
+      }
+    }, 5000);
+
+    document.getElementById('mqttForm').addEventListener('submit', function (e) {
+      e.preventDefault();
+      const message = document.getElementById('message').value.trim();
+      const activeClient = getActiveClient();
+      if (message && activeClient && activeClient.connected) {
+        activeClient.publish("ece/diFJBNOUIFOVSKJIGWIGJ", message);
+        document.getElementById('message').value = "";
+
+        const historyDiv = document.getElementById("messageHistory");
+        const item = document.createElement("div");
+        item.className = "history-item";
+        item.innerText = `Sent: ${message}`;
+        historyDiv.appendChild(item);
+      } else {
+        alert("Not connected to any MQTT broker.");
+      }
+    });
+
+    document.getElementById('clearButton').addEventListener('click', () => {
+      const activeClient = getActiveClient();
+      if (activeClient && activeClient.connected) {
+        activeClient.publish("ece/diFJBNOUIFOVSKJIGWIGJ", `CLE@R`);
+        document.getElementById('message').value = "";
+
+        const historyDiv = document.getElementById("messageHistory");
+        const item = document.createElement("div");
+        item.className = "history-item";
+        item.innerText = `Sent: CLE@R`;
+        historyDiv.appendChild(item);
+      } else {
+        alert("Not connected to any MQTT broker.");
+      }
+    });
+
+    document.getElementById('logoutButton').addEventListener('click', () => {
+      auth.signOut().then(() => window.location.href = 'index.html');
+    });
+  </script>
+</body>
+</html>
