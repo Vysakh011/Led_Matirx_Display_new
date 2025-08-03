@@ -249,6 +249,12 @@
       "Mosquitto": { name: "Mosquitto", wsUrl: "wss://test.mosquitto.org:8081/mqtt" },
       "HiveMQ": { name: "HiveMQ", wsUrl: "wss://broker.hivemq.com:8884/mqtt" }
     };
+    
+    // --- TOPIC DEFINITIONS ---
+    // Topic for sensor data from the device
+    const SENSOR_TOPIC = "ece/sensorDataujndubd"; 
+    // New topic exclusively for the web app's message history
+    const APP_HISTORY_TOPIC = "web/app/message_history_channel"; 
 
     let clients = {};
     let currentActiveBroker = null;
@@ -277,14 +283,14 @@
 
         client.on("connect", () => {
           console.log(`Connected to ${brokerName}`);
-          // Subscribe to both sensor data and the message topic
-          client.subscribe("ece/sensorDataujndubd");
-          client.subscribe("ece/diFJBNOUIFOVSKJIGWIGJ"); 
+          // Subscribe to sensor data and the new app-only history topic
+          client.subscribe(SENSOR_TOPIC);
+          client.subscribe(APP_HISTORY_TOPIC); 
         });
 
         client.on("message", (topic, message) => {
           // Handle sensor data topic
-          if (topic === "ece/sensorDataujndubd") {
+          if (topic === SENSOR_TOPIC) {
             lastSensorMessageTime = Date.now();
             currentActiveBroker = brokerName;
 
@@ -311,18 +317,16 @@
 
             updateConnectionStatus(true);
           }
-          // Handle message topic (for history)
-          else if (topic === "ece/diFJBNOUIFOVSKJIGWIGJ") {
+          // Handle the app-only message history topic
+          else if (topic === APP_HISTORY_TOPIC) {
             const historyDiv = document.getElementById("messageHistory");
             const item = document.createElement("div");
             const time = new Date().toLocaleTimeString();
             const msgText = message.toString();
 
             item.className = "history-item";
-            // Display the message and the time it was received
             item.innerText = `${msgText} - at ${time}`;
             historyDiv.appendChild(item);
-            // Auto-scroll to the latest message
             historyDiv.scrollTop = historyDiv.scrollHeight;
           }
         });
@@ -353,10 +357,9 @@
       const message = document.getElementById('message').value.trim();
       const activeClient = getActiveClient();
       if (message && activeClient && activeClient.connected) {
-        // Publish the message with the retain flag set to true
-        activeClient.publish("ece/diFJBNOUIFOVSKJIGWIGJ", message, { retain: true });
+        // Publish the message to the new app-only history topic
+        activeClient.publish(APP_HISTORY_TOPIC, message, { retain: true });
         document.getElementById('message').value = "";
-        // Message will be added to history via the 'on message' event handler
       } else {
         alert("Not connected to any MQTT broker.");
       }
@@ -365,10 +368,9 @@
     document.getElementById('clearButton').addEventListener('click', () => {
       const activeClient = getActiveClient();
       if (activeClient && activeClient.connected) {
-        // Publish the clear command with the retain flag
-        activeClient.publish("ece/diFJBNOUIFOVSKJIGWIGJ", `CLE@R`, { retain: true });
+         // Publish a "cleared" message to the app history topic
+        activeClient.publish(APP_HISTORY_TOPIC, `History Cleared`, { retain: true });
         document.getElementById('message').value = "";
-        // Message will be added to history via the 'on message' event handler
       } else {
         alert("Not connected to any MQTT broker.");
       }
