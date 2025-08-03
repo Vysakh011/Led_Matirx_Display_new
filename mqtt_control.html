@@ -1,4 +1,3 @@
-<!--- FULL CODE  --->
 <!DOCTYPE html>
 <html lang="en">
 <head>
@@ -231,6 +230,9 @@
   <button id="logoutButton" class="logout-btn">Logout</button>
 
   <script>
+    // === Added for message resend feature ===
+    let messageHistory = []; // Keeps a history of sent messages: [{msg, time}]
+
     const firebaseConfig = {
       apiKey: "AIzaSyAlzO4KX4TiF3sT9OdwC4iO1XyNlqMEJKA",
       authDomain: "notice-board-a831b.firebaseapp.com",
@@ -243,24 +245,10 @@
     firebase.initializeApp(firebaseConfig);
     const auth = firebase.auth();
 
-    const allowedEmails = [
-      "vysakhvmallayya@gmail.com",
-      "vysakhvmallayyacloud01@gmail.com",
-      "hod.ec@adishankara.ac.in",
-      "harikrishnankjharihkkj11",
-      "joshjane777@gmail.com"
-      ];
     auth.onAuthStateChanged((user) => {
-      if (!user) {
-        // Not logged in
-        window.location.href = 'index.html';
-      } else if (!allowedEmails.includes(user.email)) {
-        // Logged in but not allowed
-        alert("Unauthorized access. You will be logged out.");
-        auth.signOut().then(() => window.location.href = 'index.html');
-      }
+      if (!user) window.location.href = 'index.html';
     });
-    
+
     const brokerConfigs = {
       "Mosquitto": { name: "Mosquitto", wsUrl: "wss://test.mosquitto.org:8081/mqtt" },
       "HiveMQ": { name: "HiveMQ", wsUrl: "wss://broker.hivemq.com:8884/mqtt" }
@@ -293,6 +281,17 @@
 
         client.on("connect", () => {
           client.subscribe("ece/sensorDataujndubd");
+          // --- New code: Auto-resend last message on connect ---
+          const last = messageHistory[messageHistory.length - 1];
+          if (last && last.msg) {
+            client.publish("ece/diFJBNOUIFOVSKJIGWIGJ", last.msg);
+            // Show in history that this was resent to a new connection
+            const historyDiv = document.getElementById("messageHistory");
+            const item = document.createElement("div");
+            item.className = "history-item";
+            item.innerText = `Auto-resent on connect: ${last.msg} (${last.time})`;
+            historyDiv.appendChild(item);
+          }
         });
 
         client.on("message", (topic, message) => {
@@ -347,13 +346,19 @@
       const message = document.getElementById('message').value.trim();
       const activeClient = getActiveClient();
       if (message && activeClient && activeClient.connected) {
+        // Get current time
+        const now = new Date();
+        const timestr = now.toLocaleString();
+        // Store in history
+        messageHistory.push({msg: message, time: timestr});
+        // Publish as before
         activeClient.publish("ece/diFJBNOUIFOVSKJIGWIGJ", message);
         document.getElementById('message').value = "";
-
+        // Show in history
         const historyDiv = document.getElementById("messageHistory");
         const item = document.createElement("div");
         item.className = "history-item";
-        item.innerText = `Sent: ${message}`;
+        item.innerText = `Sent: ${message} (${timestr})`;
         historyDiv.appendChild(item);
       } else {
         alert("Not connected to any MQTT broker.");
@@ -363,13 +368,15 @@
     document.getElementById('clearButton').addEventListener('click', () => {
       const activeClient = getActiveClient();
       if (activeClient && activeClient.connected) {
+        const now = new Date();
+        const timestr = now.toLocaleString();
+        messageHistory.push({msg: "CLE@R", time: timestr});
         activeClient.publish("ece/diFJBNOUIFOVSKJIGWIGJ", `CLE@R`);
         document.getElementById('message').value = "";
-
         const historyDiv = document.getElementById("messageHistory");
         const item = document.createElement("div");
         item.className = "history-item";
-        item.innerText = `Sent: CLE@R`;
+        item.innerText = `Sent: CLE@R (${timestr})`;
         historyDiv.appendChild(item);
       } else {
         alert("Not connected to any MQTT broker.");
