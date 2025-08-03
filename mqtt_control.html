@@ -1,9 +1,3 @@
-You are absolutely right. My apologies for misunderstanding.
-
-I have now corrected the code. The "CLEAR" button will only send the message CLE@R, and this message will now appear in the message history just like any other message, without clearing anything.
-
-Here is the final, corrected code.
-
 <!DOCTYPE html>
 
 <html lang="en">
@@ -19,9 +13,10 @@ Here is the final, corrected code.
 <link rel="apple-touch-icon" href="icon-192.png" />
 <script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-app-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-auth-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-database-compat.js"></script>
 <script src="https://unpkg.com/mqtt/dist/mqtt.min.js"></script>
 <style>
-/* [ALL YOUR ORIGINAL STYLES — UNCHANGED] */
+/* [ALL YOUR ORIGINAL STYLES — UNCHANGED] /
 body {
 font-family: Arial, sans-serif;
 background: linear-gradient(to right, #6a11cb, #2575fc);
@@ -115,6 +110,7 @@ display: inline-block;
 .logout-btn:hover {
 background: darkred;
 }
+/ *** MODIFIED: Reverted back to the message history list view *** */
 #messageHistory {
 margin-top: 20px;
 max-height: 200px;
@@ -168,31 +164,6 @@ color: white;
 background-color: #f44336;
 color: white;
 }
-#installBtn {
-display: none;
-background: #4CAF50;
-margin: 10px 0;
-}
-@media (max-width: 600px) {
-.container {
-max-width: 95%;
-width: auto;
-padding: 15px;
-}
-h1 {
-font-size: 20px;
-}
-button {
-font-size: 14px;
-padding: 8px;
-}
-.logout-btn {
-font-size: 12px;
-padding: 8px 12px;
-bottom: 15px;
-right: 15px;
-}
-}
 </style>
 </head>
 <body>
@@ -211,7 +182,7 @@ right: 15px;
   <button type="submit" id="sendButton">Send Message</button>
 </form>
 
-<button id="clearButton">CLEAR</button>
+<button id="clearButton">CLEAR HISTORY</button>
 
 <div id="messageHistory">
   <h3>Message History</h3>
@@ -239,18 +210,25 @@ right: 15px;
 <script>
 const firebaseConfig = {
 apiKey: "AIzaSyAlzO4KX4TiF3sT9OdwC4iO1XyNlqMEJKA",
-authDomain: "notice-board-a831b.firebaseapp.com",
+authDomain: "https://www.google.com/search?q=notice-board-a831b.firebaseapp.com",
 projectId: "notice-board-a831b",
-storageBucket: "notice-board-a831b.appspot.com",
+storageBucket: "https://www.google.com/search?q=notice-board-a831b.appspot.com",
 messagingSenderId: "879522552762",
 appId: "1:879522552762:web:89f0f4811411582c0f9b83",
 measurementId: "G-VRPVZK06P1"
 };
 firebase.initializeApp(firebaseConfig);
 const auth = firebase.auth();
+const database = firebase.database();
+const historyRef = database.ref('message_history/ece/diFJBNOUIFOVSKJIGWIGJ');
 
 auth.onAuthStateChanged((user) =&gt; {
-  if (!user) window.location.href = &#39;index.html&#39;;
+  if (user) {
+    setupAllBrokers();
+    loadAndDisplayHistory();
+  } else {
+    window.location.href = &#39;index.html&#39;;
+  }
 });
 
 const brokerConfigs = {
@@ -273,6 +251,37 @@ function getActiveClient() {
   return currentActiveBroker ? clients[currentActiveBroker] : null;
 }
 
+// *** MODIFIED: This function loads the FULL history and scrolls to the bottom ***
+function loadAndDisplayHistory() {
+  historyRef.on(&#39;value&#39;, (snapshot) =&gt; {
+    const historyDiv = document.getElementById(&quot;messageHistory&quot;);
+    const historyTitle = historyDiv.querySelector(&#39;h3&#39;);
+    
+    historyDiv.innerHTML = &#39;&#39;;
+    historyDiv.appendChild(historyTitle);
+
+    if (snapshot.exists()) {
+      const messages = snapshot.val();
+      for (const key in messages) {
+        const message = messages[key];
+        const item = document.createElement(&quot;div&quot;);
+        item.className = &quot;history-item&quot;;
+        item.innerText = message.text;
+        historyDiv.appendChild(item);
+      }
+    } else {
+      const item = document.createElement(&quot;div&quot;);
+      item.className = &quot;history-item&quot;;
+      item.style.fontStyle = &quot;italic&quot;;
+      item.innerText = &quot;No messages yet.&quot;;
+      historyDiv.appendChild(item);
+    }
+
+    // This line automatically scrolls the list to the bottom to show the last message
+    historyDiv.scrollTop = historyDiv.scrollHeight;
+  });
+}
+
 function setupAllBrokers() {
   Object.entries(brokerConfigs).forEach(([brokerName, config]) =&gt; {
     const client = mqtt.connect(config.wsUrl, {
@@ -280,68 +289,35 @@ function setupAllBrokers() {
       clean: true,
       reconnectPeriod: 1000,
     });
-
     clients[brokerName] = client;
-
-    client.on(&quot;connect&quot;, () =&gt; {
-      client.subscribe(&quot;ece/sensorDataujndubd&quot;);
-      client.subscribe(&quot;ece/diFJBNOUIFOVSKJIGWIGJ&quot;); 
-    });
-
+    client.on(&quot;connect&quot;, () =&gt; client.subscribe(&quot;ece/sensorDataujndubd&quot;));
     client.on(&quot;message&quot;, (topic, message) =&gt; {
-      const messageStr = message.toString();
-
       if (topic === &quot;ece/sensorDataujndubd&quot;) {
         lastSensorMessageTime = Date.now();
         currentActiveBroker = brokerName;
-
-        const parts = messageStr.split(&quot;|&quot;).map(p =&gt; p.trim());
-        const temp = parseFloat(parts[0]?.split(&quot;:&quot;)[1]);
-        const press = parseFloat(parts[1]?.split(&quot;:&quot;)[1]);
-        const alt = parseFloat(parts[2]?.split(&quot;:&quot;)[1]);
-        const weather = parts[3];
+        const parts = message.toString().split(&quot;|&quot;).map(p =&gt; p.trim());
+        document.getElementById(&quot;temp&quot;).innerText = `${parseFloat(parts[0]?.split(&quot;:&quot;)[1]).toFixed(1)} °C`;
+        document.getElementById(&quot;pressure&quot;).innerText = `${parseFloat(parts[1]?.split(&quot;:&quot;)[1]).toFixed(1)} hPa`;
+        document.getElementById(&quot;altitude&quot;).innerText = `${parseFloat(parts[2]?.split(&quot;:&quot;)[1]).toFixed(1)} m`;
+        document.getElementById(&quot;weather&quot;).innerText = parts[3] || &quot;--&quot;;
+        const wifiBox = document.getElementById(&quot;boardWiFiStatus&quot;);
+        const mqttBox = document.getElementById(&quot;boardMQTTStatus&quot;);
         const wifiStatus = parts[4]?.includes(&quot;Connected&quot;);
         const mqttStatus = parts[5]?.includes(&quot;Connected&quot;);
-
-        document.getElementById(&quot;temp&quot;).innerText = isNaN(temp) ? &quot;--&quot; : `${temp.toFixed(1)} °C`;
-        document.getElementById(&quot;pressure&quot;).innerText = isNaN(press) ? &quot;--&quot; : `${press.toFixed(1)} hPa`;
-        document.getElementById(&quot;altitude&quot;).innerText = isNaN(alt) ? &quot;--&quot; : `${alt.toFixed(1)} m`;
-        document.getElementById(&quot;weather&quot;).innerText = weather || &quot;--&quot;;
-
-        const wifiBox = document.getElementById(&quot;boardWiFiStatus&quot;);
         wifiBox.textContent = wifiStatus ? &quot;Device WiFi Connected&quot; : &quot;Device WiFi Disconnected&quot;;
         wifiBox.className = wifiStatus ? &quot;status-box status-connected&quot; : &quot;status-box status-disconnected&quot;;
-
-        const mqttBox = document.getElementById(&quot;boardMQTTStatus&quot;);
         mqttBox.textContent = mqttStatus ? &quot;Device MQTT Connected&quot; : &quot;Device MQTT Disconnected&quot;;
         mqttBox.className = mqttStatus ? &quot;status-box status-connected&quot; : &quot;status-box status-disconnected&quot;;
-
         updateConnectionStatus(true);
-      
-      } else if (topic === &quot;ece/diFJBNOUIFOVSKJIGWIGJ&quot;) {
-        const historyDiv = document.getElementById(&quot;messageHistory&quot;);
-        
-        // *** MODIFIED: Removed the special logic for &#39;CLE@R&#39;. It is now treated like any other message. ***
-        const item = document.createElement(&quot;div&quot;);
-        item.className = &quot;history-item&quot;;
-        item.innerText = messageStr;
-        historyDiv.appendChild(item);
-        
-        historyDiv.scrollTop = historyDiv.scrollHeight;
       }
     });
-
     client.on(&quot;close&quot;, () =&gt; updateConnectionStatus(false));
   });
 }
 
-setupAllBrokers();
-
 setInterval(() =&gt; {
   if (Date.now() - lastSensorMessageTime &gt; SENSOR_TIMEOUT_MS) {
-    document.getElementById(&quot;boardWiFiStatus&quot;).textContent = &quot;Device WiFi Disconnected&quot;;
     document.getElementById(&quot;boardWiFiStatus&quot;).className = &quot;status-box status-disconnected&quot;;
-    document.getElementById(&quot;boardMQTTStatus&quot;).textContent = &quot;Device MQTT Disconnected&quot;;
     document.getElementById(&quot;boardMQTTStatus&quot;).className = &quot;status-box status-disconnected&quot;;
     updateConnectionStatus(false);
     currentActiveBroker = null;
@@ -350,10 +326,15 @@ setInterval(() =&gt; {
 
 document.getElementById(&#39;mqttForm&#39;).addEventListener(&#39;submit&#39;, function (e) {
   e.preventDefault();
-  const message = document.getElementById(&#39;message&#39;).value.trim();
+  const messageText = document.getElementById(&#39;message&#39;).value.trim();
   const activeClient = getActiveClient();
-  if (message &amp;&amp; activeClient &amp;&amp; activeClient.connected) {
-    activeClient.publish(&quot;ece/diFJBNOUIFOVSKJIGWIGJ&quot;, message);
+  if (messageText &amp;&amp; activeClient &amp;&amp; activeClient.connected) {
+    activeClient.publish(&quot;ece/diFJBNOUIFOVSKJIGWIGJ&quot;, messageText);
+    const messageData = {
+      text: messageText,
+      timestamp: firebase.database.ServerValue.TIMESTAMP
+    };
+    historyRef.push(messageData);
     document.getElementById(&#39;message&#39;).value = &quot;&quot;;
   } else {
     alert(&quot;Not connected to any MQTT broker or message is empty.&quot;);
@@ -361,16 +342,13 @@ document.getElementById(&#39;mqttForm&#39;).addEventListener(&#39;submit&#39;, f
 });
 
 document.getElementById(&#39;clearButton&#39;).addEventListener(&#39;click&#39;, () =&gt; {
-  const activeClient = getActiveClient();
-  if (activeClient &amp;&amp; activeClient.connected) {
-    activeClient.publish(&quot;ece/diFJBNOUIFOVSKJIGWIGJ&quot;, `CLE@R`);
-  } else {
-    alert(&quot;Not connected to any MQTT broker.&quot;);
+  if (confirm(&quot;Are you sure you want to permanently delete the entire message history for everyone?&quot;)) {
+    historyRef.remove();
   }
 });
 
 document.getElementById(&#39;logoutButton&#39;).addEventListener(&#39;click&#39;, () =&gt; {
-  auth.signOut().then(() =&gt; window.location.href = &#39;index.html&#39;);
+  auth.signOut();
 });
 </script>
 
