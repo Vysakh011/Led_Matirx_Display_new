@@ -14,7 +14,6 @@
   <script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-auth-compat.js"></script>
   <script src="https://unpkg.com/mqtt/dist/mqtt.min.js"></script>
   <style>
-    /* [ALL YOUR ORIGINAL STYLES — UNCHANGED] */
     body {
       font-family: Arial, sans-serif;
       background: linear-gradient(to right, #6a11cb, #2575fc);
@@ -230,9 +229,6 @@
   <button id="logoutButton" class="logout-btn">Logout</button>
 
   <script>
-    // === Added for message resend feature ===
-    let messageHistory = []; // Keeps a history of sent messages: [{msg, time}]
-
     const firebaseConfig = {
       apiKey: "AIzaSyAlzO4KX4TiF3sT9OdwC4iO1XyNlqMEJKA",
       authDomain: "notice-board-a831b.firebaseapp.com",
@@ -280,51 +276,62 @@
         clients[brokerName] = client;
 
         client.on("connect", () => {
+          console.log(`Connected to ${brokerName}`);
+          // Subscribe to both sensor data and the message topic
           client.subscribe("ece/sensorDataujndubd");
-          // --- New code: Auto-resend last message on connect ---
-          const last = messageHistory[messageHistory.length - 1];
-          if (last && last.msg) {
-            client.publish("ece/diFJBNOUIFOVSKJIGWIGJ", last.msg);
-            // Show in history that this was resent to a new connection
-            const historyDiv = document.getElementById("messageHistory");
-            const item = document.createElement("div");
-            item.className = "history-item";
-            item.innerText = `Auto-resent on connect: ${last.msg} (${last.time})`;
-            historyDiv.appendChild(item);
-          }
+          client.subscribe("ece/diFJBNOUIFOVSKJIGWIGJ"); 
         });
 
         client.on("message", (topic, message) => {
-          if (topic !== "ece/sensorDataujndubd") return;
+          // Handle sensor data topic
+          if (topic === "ece/sensorDataujndubd") {
+            lastSensorMessageTime = Date.now();
+            currentActiveBroker = brokerName;
 
-          lastSensorMessageTime = Date.now();
-          currentActiveBroker = brokerName;
+            const parts = message.toString().split("|").map(p => p.trim());
+            const temp = parseFloat(parts[0]?.split(":")[1]);
+            const press = parseFloat(parts[1]?.split(":")[1]);
+            const alt = parseFloat(parts[2]?.split(":")[1]);
+            const weather = parts[3];
+            const wifiStatus = parts[4]?.includes("Connected");
+            const mqttStatus = parts[5]?.includes("Connected");
 
-          const parts = message.toString().split("|").map(p => p.trim());
-          const temp = parseFloat(parts[0]?.split(":")[1]);
-          const press = parseFloat(parts[1]?.split(":")[1]);
-          const alt = parseFloat(parts[2]?.split(":")[1]);
-          const weather = parts[3];
-          const wifiStatus = parts[4]?.includes("Connected");
-          const mqttStatus = parts[5]?.includes("Connected");
+            document.getElementById("temp").innerText = isNaN(temp) ? "--" : `${temp.toFixed(1)} °C`;
+            document.getElementById("pressure").innerText = isNaN(press) ? "--" : `${press.toFixed(1)} hPa`;
+            document.getElementById("altitude").innerText = isNaN(alt) ? "--" : `${alt.toFixed(1)} m`;
+            document.getElementById("weather").innerText = weather || "--";
 
-          document.getElementById("temp").innerText = isNaN(temp) ? "--" : `${temp.toFixed(1)} °C`;
-          document.getElementById("pressure").innerText = isNaN(press) ? "--" : `${press.toFixed(1)} hPa`;
-          document.getElementById("altitude").innerText = isNaN(alt) ? "--" : `${alt.toFixed(1)} m`;
-          document.getElementById("weather").innerText = weather || "--";
+            const wifiBox = document.getElementById("boardWiFiStatus");
+            wifiBox.textContent = wifiStatus ? "Device WiFi Connected" : "Device WiFi Disconnected";
+            wifiBox.className = wifiStatus ? "status-box status-connected" : "status-box status-disconnected";
 
-          const wifiBox = document.getElementById("boardWiFiStatus");
-          wifiBox.textContent = wifiStatus ? "Device WiFi Connected" : "Device WiFi Disconnected";
-          wifiBox.className = wifiStatus ? "status-box status-connected" : "status-box status-disconnected";
+            const mqttBox = document.getElementById("boardMQTTStatus");
+            mqttBox.textContent = mqttStatus ? "Device MQTT Connected" : "Device MQTT Disconnected";
+            mqttBox.className = mqttStatus ? "status-box status-connected" : "status-box status-disconnected";
 
-          const mqttBox = document.getElementById("boardMQTTStatus");
-          mqttBox.textContent = mqttStatus ? "Device MQTT Connected" : "Device MQTT Disconnected";
-          mqttBox.className = mqttStatus ? "status-box status-connected" : "status-box status-disconnected";
+            updateConnectionStatus(true);
+          }
+          // Handle message topic (for history)
+          else if (topic === "ece/diFJBNOUIFOVSKJIGWIGJ") {
+            const historyDiv = document.getElementById("messageHistory");
+            const item = document.createElement("div");
+            const time = new Date().toLocaleTimeString();
+            const msgText = message.toString();
 
-          updateConnectionStatus(true);
+            item.className = "history-item";
+            // Display the message and the time it was received
+            item.innerText = `${msgText} - at ${time}`;
+            historyDiv.appendChild(item);
+            // Auto-scroll to the latest message
+            historyDiv.scrollTop = historyDiv.scrollHeight;
+          }
         });
 
-        client.on("close", () => updateConnectionStatus(false));
+        client.on("close", () => {
+          if (currentActiveBroker === brokerName) {
+            updateConnectionStatus(false);
+          }
+        });
       });
     }
 
@@ -346,20 +353,10 @@
       const message = document.getElementById('message').value.trim();
       const activeClient = getActiveClient();
       if (message && activeClient && activeClient.connected) {
-        // Get current time
-        const now = new Date();
-        const timestr = now.toLocaleString();
-        // Store in history
-        messageHistory.push({msg: message, time: timestr});
-        // Publish as before
-        activeClient.publish("ece/diFJBNOUIFOVSKJIGWIGJ", message);
+        // Publish the message with the retain flag set to true
+        activeClient.publish("ece/diFJBNOUIFOVSKJIGWIGJ", message, { retain: true });
         document.getElementById('message').value = "";
-        // Show in history
-        const historyDiv = document.getElementById("messageHistory");
-        const item = document.createElement("div");
-        item.className = "history-item";
-        item.innerText = `Sent: ${message} (${timestr})`;
-        historyDiv.appendChild(item);
+        // Message will be added to history via the 'on message' event handler
       } else {
         alert("Not connected to any MQTT broker.");
       }
@@ -368,16 +365,10 @@
     document.getElementById('clearButton').addEventListener('click', () => {
       const activeClient = getActiveClient();
       if (activeClient && activeClient.connected) {
-        const now = new Date();
-        const timestr = now.toLocaleString();
-        messageHistory.push({msg: "CLE@R", time: timestr});
-        activeClient.publish("ece/diFJBNOUIFOVSKJIGWIGJ", `CLE@R`);
+        // Publish the clear command with the retain flag
+        activeClient.publish("ece/diFJBNOUIFOVSKJIGWIGJ", `CLE@R`, { retain: true });
         document.getElementById('message').value = "";
-        const historyDiv = document.getElementById("messageHistory");
-        const item = document.createElement("div");
-        item.className = "history-item";
-        item.innerText = `Sent: CLE@R (${timestr})`;
-        historyDiv.appendChild(item);
+        // Message will be added to history via the 'on message' event handler
       } else {
         alert("Not connected to any MQTT broker.");
       }
